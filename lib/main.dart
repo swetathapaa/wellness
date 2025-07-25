@@ -1,6 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+
 import 'add_category_screen.dart';
 import 'add_health_tips_screen.dart';
 import 'add_qoute_screen.dart';
@@ -48,16 +49,12 @@ class MyApp extends StatelessWidget {
           initialRoute: '/login',
           routes: {
             '/login': (context) => const LoginScreen(),
-            '/signup': (context) => SignUpScreen(),
+            '/signup': (context) => const SignUpScreen(),
             '/preference': (context) => const PreferenceScreen(),
             '/dashboard': (context) => const DashboardScreen(),
             '/add_category': (context) => const AddCategoryScreen(),
             '/add_health_tip': (context) => const AddHealthTipsScreen(),
             '/add_quote': (context) => const AddQuoteScreen(),
-
-
-
-
 
           },
         );

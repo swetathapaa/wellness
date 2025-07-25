@@ -4,6 +4,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'preference_screen.dart';
+import 'dashboard_screen.dart';
+import 'admin_dashboard_screen.dart';
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -19,12 +23,48 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> createUserInFirestore(User user) async {
     final userDoc = FirebaseFirestore.instance.collection('users').doc(user.uid);
     final snapshot = await userDoc.get();
+
     if (!snapshot.exists) {
       await userDoc.set({
-        'email': user.email ?? '',
         'displayName': user.displayName ?? '',
+        'email': user.email ?? '',
+        'role': 'customer',
+        'userId': user.uid,
         'createdAt': FieldValue.serverTimestamp(),
       });
+    }
+  }
+
+  Future<void> navigateBasedOnRole(User user) async {
+    final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    final role = userDoc.data()?['role']?.toString().trim() ?? 'customer';
+
+    if (role == 'admin') {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
+      );
+    } else {
+      // For customers, check if preferences exist
+      final prefSnapshot = await FirebaseFirestore.instance
+          .collection('user_preference')
+          .where('userId', isEqualTo: user.uid)
+          .limit(1)
+          .get();
+
+      if (prefSnapshot.docs.isNotEmpty) {
+        // User already selected preferences
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const DashboardScreen()),
+        );
+      } else {
+        // First time login, go to preference screen
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const PreferenceScreen()),
+        );
+      }
     }
   }
 
@@ -38,9 +78,8 @@ class _LoginScreenState extends State<LoginScreen> {
       final user = userCredential.user;
       if (user != null) {
         await createUserInFirestore(user);
+        await navigateBasedOnRole(user);
       }
-
-      Navigator.pushNamed(context, '/preference'); // or '/dashboard'
     } catch (e) {
       showDialog(
         context: context,
@@ -54,11 +93,13 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> signInWithGoogle() async {
     try {
-      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
-      if (googleUser == null) return; // user cancelled
+      final GoogleSignIn googleSignIn = GoogleSignIn();
+      await googleSignIn.signOut(); // Always show popup
 
-      final GoogleSignInAuthentication googleAuth =
-      await googleUser.authentication;
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+      if (googleUser == null) return;
+
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
 
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
@@ -70,9 +111,8 @@ class _LoginScreenState extends State<LoginScreen> {
       final user = userCredential.user;
       if (user != null) {
         await createUserInFirestore(user);
+        await navigateBasedOnRole(user);
       }
-
-      Navigator.pushNamed(context, '/preference');
     } catch (e) {
       print("Google Sign-In error: $e");
       showDialog(
@@ -88,7 +128,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black, // keep original theme
+      backgroundColor: Colors.black,
       body: Padding(
         padding: EdgeInsets.symmetric(horizontal: 24.w),
         child: Center(
@@ -131,7 +171,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: OutlinedButton(
                     onPressed: signInWithGoogle,
                     style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: Colors.white),
+                      side: const BorderSide(color: Colors.white),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -139,8 +179,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         Image.asset('assets/images/google.png', height: 24.h),
                         SizedBox(width: 10.w),
                         Text("Sign in with Google",
-                            style:
-                            TextStyle(color: Colors.white, fontSize: 14.sp)),
+                            style: TextStyle(color: Colors.white, fontSize: 14.sp)),
                       ],
                     ),
                   ),

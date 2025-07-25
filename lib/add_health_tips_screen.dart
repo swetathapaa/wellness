@@ -9,8 +9,8 @@ class AddHealthTipsScreen extends StatefulWidget {
 }
 
 class _AddHealthTipsScreenState extends State<AddHealthTipsScreen> {
-  List<String> categories = [];
-  String? selectedCategory;
+  List<Map<String, String>> categories = [];
+  String? selectedCategoryId;
   final TextEditingController titleController = TextEditingController();
   final TextEditingController descriptionController = TextEditingController();
   bool isLoadingCategories = true;
@@ -25,15 +25,17 @@ class _AddHealthTipsScreenState extends State<AddHealthTipsScreen> {
   Future<void> fetchCategories() async {
     try {
       final snapshot = await FirebaseFirestore.instance
-          .collection('entries')
+          .collection('categories')
           .where('type', isEqualTo: 'HealthTips')
           .get();
 
-      final cats = snapshot.docs
-          .map((doc) => (doc.data()['category'] as String?) ?? '')
-          .where((cat) => cat.isNotEmpty)
-          .toSet()
-          .toList();
+      final cats = snapshot.docs.map((doc) {
+        final data = doc.data();
+        return {
+          'categoryId': doc.id,
+          'categoryName': (data['categoryName'] ?? '').toString(),
+        };
+      }).toList();
 
       setState(() {
         categories = cats;
@@ -49,11 +51,12 @@ class _AddHealthTipsScreenState extends State<AddHealthTipsScreen> {
     }
   }
 
+
   Future<void> _submitTip() async {
     final title = titleController.text.trim();
     final description = descriptionController.text.trim();
 
-    if (selectedCategory == null || title.isEmpty || description.isEmpty) {
+    if (selectedCategoryId == null || title.isEmpty || description.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("All fields are required.")),
       );
@@ -65,45 +68,13 @@ class _AddHealthTipsScreenState extends State<AddHealthTipsScreen> {
     });
 
     try {
-      // Search for existing category document (without quote/title)
-      final querySnapshot = await FirebaseFirestore.instance
-          .collection('entries')
-          .where('type', isEqualTo: 'HealthTips')
-          .where('category', isEqualTo: selectedCategory)
-          .get();
-
-      DocumentSnapshot? existingDoc;
-
-      for (var doc in querySnapshot.docs) {
-        final data = doc.data() as Map<String, dynamic>;
-        final hasQuote = data.containsKey('quote');
-        final hasTitle = data.containsKey('title');
-        if (!hasQuote && !hasTitle) {
-          existingDoc = doc;
-          break;
-        }
-      }
-
-      if (existingDoc != null) {
-        // Update existing document with new tip details
-        await FirebaseFirestore.instance
-            .collection('entries')
-            .doc(existingDoc.id)
-            .update({
-          'title': title,
-          'quote': description,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-      } else {
-        // No category doc found, create new document
-        await FirebaseFirestore.instance.collection('entries').add({
-          'category': selectedCategory,
-          'title': title,
-          'quote': description,
-          'type': 'HealthTips',
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-      }
+      await FirebaseFirestore.instance.collection('entries').add({
+        'categoryId': selectedCategoryId,
+        'title': title,
+        'quote': description,
+        'type': 'HealthTips',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Health tip added successfully.")),
@@ -119,6 +90,13 @@ class _AddHealthTipsScreenState extends State<AddHealthTipsScreen> {
         isSaving = false;
       });
     }
+  }
+
+  @override
+  void dispose() {
+    titleController.dispose();
+    descriptionController.dispose();
+    super.dispose();
   }
 
   @override
@@ -171,17 +149,17 @@ class _AddHealthTipsScreenState extends State<AddHealthTipsScreen> {
                   hintStyle: const TextStyle(color: Colors.grey),
                 ),
                 style: const TextStyle(color: Colors.white),
-                value: selectedCategory,
+                value: selectedCategoryId,
                 items: categories
                     .map(
                       (category) => DropdownMenuItem(
-                    value: category,
-                    child: Text(category),
+                    value: category['categoryId'],
+                    child: Text(category['categoryName'] ?? ''),
                   ),
                 )
                     .toList(),
                 onChanged: (value) =>
-                    setState(() => selectedCategory = value),
+                    setState(() => selectedCategoryId = value),
               ),
               const SizedBox(height: 24),
               const Text(

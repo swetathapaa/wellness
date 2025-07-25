@@ -9,8 +9,8 @@ class AddQuoteScreen extends StatefulWidget {
 }
 
 class _AddQuoteScreenState extends State<AddQuoteScreen> {
-  List<String> categories = [];
-  String? selectedCategory;
+  List<Map<String, String>> categories = [];
+  String? selectedCategoryId;
   final TextEditingController authorController = TextEditingController();
   final TextEditingController quoteController = TextEditingController();
   bool isLoadingCategories = true;
@@ -24,15 +24,17 @@ class _AddQuoteScreenState extends State<AddQuoteScreen> {
   Future<void> fetchCategories() async {
     try {
       final snapshot = await FirebaseFirestore.instance
-          .collection('entries')
-          .where('type', isEqualTo: 'Quotes')
+          .collection('categories')
+          .where('type', isEqualTo: 'Quotes')  // <-- filter by type 'Quotes'
           .get();
 
-      final cats = snapshot.docs
-          .map((doc) => (doc.data()['category'] as String?) ?? '')
-          .where((cat) => cat.isNotEmpty)
-          .toSet()
-          .toList();
+      final cats = snapshot.docs.map((doc) {
+        final data = doc.data();
+        return {
+          'categoryId': doc.id,
+          'categoryName': (data['categoryName'] ?? '').toString(),
+        };
+      }).toList();
 
       setState(() {
         categories = cats;
@@ -48,21 +50,28 @@ class _AddQuoteScreenState extends State<AddQuoteScreen> {
     }
   }
 
+
   void _saveQuote() async {
-    if (selectedCategory == null ||
-        authorController.text.trim().isEmpty ||
-        quoteController.text.trim().isEmpty) {
+    final author = authorController.text.trim();
+    final quote = quoteController.text.trim();
+
+    if (selectedCategoryId == null || author.isEmpty || quote.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("All fields are required")),
       );
       return;
     }
 
+    final selectedCategory = categories.firstWhere(
+          (cat) => cat['categoryId'] == selectedCategoryId,
+      orElse: () => {'categoryName': ''},
+    );
+
     final quoteData = {
-      'category': selectedCategory!,
-      'author': authorController.text.trim(),
-      'quote': quoteController.text.trim(),
-      'title': selectedCategory!,  // You can set title same as category or as needed
+      'categoryId': selectedCategoryId!,
+      'title': selectedCategory['categoryName']!,
+      'author': author,
+      'quote': quote,
       'type': 'Quotes',
       'createdAt': FieldValue.serverTimestamp(),
     };
@@ -133,18 +142,20 @@ class _AddQuoteScreenState extends State<AddQuoteScreen> {
                   contentPadding: const EdgeInsets.symmetric(
                       horizontal: 12, vertical: 14),
                 ),
-                value: selectedCategory,
+                value: selectedCategoryId,
                 items: categories
                     .map((cat) => DropdownMenuItem<String>(
-                  value: cat,
-                  child: Text(cat,
-                      style:
-                      const TextStyle(color: Colors.white)),
+                  value: cat['categoryId'],
+                  child: Text(cat['categoryName'] ?? '',
+                      style: const TextStyle(
+                          color: Colors.white)),
                 ))
                     .toList(),
                 onChanged: (value) =>
-                    setState(() => selectedCategory = value),
+                    setState(() => selectedCategoryId = value),
                 style: const TextStyle(color: Colors.white),
+                hint: const Text("Select category",
+                    style: TextStyle(color: Colors.grey)),
               ),
               const SizedBox(height: 20),
               const Text(

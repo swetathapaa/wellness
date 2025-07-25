@@ -5,8 +5,6 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:wellness/preference_screen.dart';
 
-import 'dashboard_screen.dart'; // Adjust the path as per your project
-
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
 
@@ -27,13 +25,15 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn(scopes: ['email']);
 
-  Future<void> createUserInFirestore(User user) async {
+  Future<void> createUserInFirestore(User user, {String? name}) async {
     final userDoc = FirebaseFirestore.instance.collection('users').doc(user.uid);
     final snapshot = await userDoc.get();
     if (!snapshot.exists) {
       await userDoc.set({
+        'displayName': name ?? user.displayName ?? '',
         'email': user.email ?? '',
-        'displayName': user.displayName ?? '',
+        'userId': user.uid,
+        'role': 'customer',
         'createdAt': FieldValue.serverTimestamp(),
       });
     }
@@ -89,13 +89,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
       final user = userCredential.user;
       if (user != null) {
-        await createUserInFirestore(user);
+        await createUserInFirestore(user, name: nameController.text.trim());
       }
 
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const PreferenceScreen(
-        )),
+        MaterialPageRoute(builder: (_) => const PreferenceScreen()),
       );
     } on FirebaseAuthException catch (e) {
       setState(() {
@@ -119,12 +118,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
     });
 
     try {
+      await _googleSignIn.signOut(); // Force account chooser every time
+
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       if (googleUser == null) {
-        setState(() {
-          isLoading = false;
-        });
-        return; // user cancelled
+        setState(() => isLoading = false);
+        return; // User cancelled
       }
 
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
@@ -134,14 +133,39 @@ class _SignUpScreenState extends State<SignUpScreen> {
         idToken: googleAuth.idToken,
       );
 
-      UserCredential userCredential = await _auth.signInWithCredential(credential);
-
+      final userCredential = await _auth.signInWithCredential(credential);
       final user = userCredential.user;
-      if (user != null) {
-        await createUserInFirestore(user);
+      final isNewUser = userCredential.additionalUserInfo?.isNewUser ?? false;
+
+      if (!isNewUser) {
+        // Existing user trying to sign up
+        setState(() {
+          errorMessage = "Account already exists. Please log in instead.";
+        });
+        await _auth.signOut();
+
+        // Delay a bit so user can read the message (optional)
+        await Future.delayed(const Duration(seconds: 2));
+
+        // Navigate to login screen
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, '/login');
+        }
+        return;
       }
 
-      if (userCredential.user != null) {
+      // New user signup: create Firestore user doc
+      if (user != null) {
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          'displayName': user.displayName ?? '',
+          'email': user.email ?? '',
+          'userId': user.uid,
+          'role': 'customer',
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      if (mounted) {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const PreferenceScreen()),
@@ -152,11 +176,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
         errorMessage = 'Google sign-in failed: $e';
       });
     } finally {
-      setState(() {
-        isLoading = false;
-      });
+      setState(() => isLoading = false);
     }
   }
+
+
+
 
   @override
   void dispose() {
@@ -188,88 +213,52 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 ),
                 SizedBox(height: 32.h),
 
-                // Name Field
+                // Name
                 TextField(
                   controller: nameController,
                   decoration: InputDecoration(
                     hintText: 'Enter your name',
-                    hintStyle: TextStyle(color: Colors.grey),
-                    prefixIcon: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Image.asset(
-                        'assets/images/person.png',
-                        width: 20,
-                        height: 20,
-                        errorBuilder: (_, __, ___) =>
-                        const Icon(Icons.person, color: Colors.white),
-                      ),
-                    ),
+                    hintStyle: const TextStyle(color: Colors.grey),
+                    prefixIcon: const Icon(Icons.person, color: Colors.white),
                   ),
                   style: const TextStyle(color: Colors.white),
                 ),
                 SizedBox(height: 16.h),
 
-                // Email Field
+                // Email
                 TextField(
                   controller: emailController,
                   decoration: InputDecoration(
                     hintText: 'Enter your email',
-                    hintStyle: TextStyle(color: Colors.grey),
-                    prefixIcon: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Image.asset(
-                        'assets/images/mail.png',
-                        width: 20,
-                        height: 20,
-                        errorBuilder: (_, __, ___) =>
-                        const Icon(Icons.email, color: Colors.white),
-                      ),
-                    ),
+                    hintStyle: const TextStyle(color: Colors.grey),
+                    prefixIcon: const Icon(Icons.email, color: Colors.white),
                   ),
-                  style: const TextStyle(color: Colors.white),
                   keyboardType: TextInputType.emailAddress,
+                  style: const TextStyle(color: Colors.white),
                 ),
                 SizedBox(height: 16.h),
 
-                // Password Field
+                // Password
                 TextField(
                   controller: passwordController,
                   obscureText: true,
                   decoration: InputDecoration(
                     hintText: 'Enter your password',
-                    hintStyle: TextStyle(color: Colors.grey),
-                    prefixIcon: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Image.asset(
-                        'assets/images/lock.png',
-                        width: 20,
-                        height: 20,
-                        errorBuilder: (_, __, ___) =>
-                        const Icon(Icons.lock, color: Colors.white),
-                      ),
-                    ),
+                    hintStyle: const TextStyle(color: Colors.grey),
+                    prefixIcon: const Icon(Icons.lock, color: Colors.white),
                   ),
                   style: const TextStyle(color: Colors.white),
                 ),
                 SizedBox(height: 16.h),
 
-                // Confirm Password Field
+                // Confirm Password
                 TextField(
                   controller: confirmPasswordController,
                   obscureText: true,
                   decoration: InputDecoration(
                     hintText: 'Confirm your password',
-                    hintStyle: TextStyle(color: Colors.grey),
-                    prefixIcon: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Image.asset(
-                        'assets/images/lock.png',
-                        width: 20,
-                        height: 20,
-                        errorBuilder: (_, __, ___) =>
-                        const Icon(Icons.lock_outline, color: Colors.white),
-                      ),
-                    ),
+                    hintStyle: const TextStyle(color: Colors.grey),
+                    prefixIcon: const Icon(Icons.lock_outline, color: Colors.white),
                   ),
                   style: const TextStyle(color: Colors.white),
                 ),
@@ -302,7 +291,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     ),
                   ),
 
-                // Sign Up Button
+                // Sign Up
                 SizedBox(
                   width: double.infinity,
                   height: 50.h,
@@ -313,10 +302,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         : Text('Sign Up', style: TextStyle(fontSize: 16.sp)),
                   ),
                 ),
-
                 SizedBox(height: 20.h),
 
-                // Google Sign Up
+                // Google Sign In
                 SizedBox(
                   width: double.infinity,
                   height: 50.h,
@@ -339,7 +327,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     onPressed: isLoading ? null : signInWithGoogle,
                   ),
                 ),
-
                 SizedBox(height: 24.h),
 
                 Center(

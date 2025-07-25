@@ -1,9 +1,10 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'admin_dashboard_screen.dart';
 import 'change_password_screen.dart';
 import 'forget_password_screen.dart';
-import 'login_screen.dart'; // <-- Make sure this exists in your project
+import 'login_screen.dart';
+import 'preference_screen.dart'; // Added this
+// Removed admin_dashboard_screen.dart import
 
 class ProfileScreen extends StatelessWidget {
   final User? user = FirebaseAuth.instance.currentUser;
@@ -33,8 +34,7 @@ class ProfileScreen extends StatelessWidget {
                     const SizedBox(width: 8),
                     const Text(
                       'Profile',
-                      style:
-                      TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
@@ -74,9 +74,7 @@ class ProfileScreen extends StatelessWidget {
                             const SizedBox(height: 4),
                             Text(
                               email,
-                              style: const TextStyle(
-                                color: Colors.grey,
-                              ),
+                              style: const TextStyle(color: Colors.grey),
                             ),
                           ],
                         ),
@@ -87,15 +85,19 @@ class ProfileScreen extends StatelessWidget {
 
                 const SizedBox(height: 30),
                 const Text("Preferences",
-                    style:
-                    TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 10),
 
-                buildButton("Content Preferences", Icons.tune, () {}),
+                buildButton("Add More Preferences", Icons.add_circle_outline, () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const PreferenceScreen()),
+                  );
+                }),
+
                 const SizedBox(height: 30),
                 const Text("Account",
-                    style:
-                    TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 10),
 
                 buildButton("Theme", Icons.dark_mode, () {}),
@@ -114,17 +116,7 @@ class ProfileScreen extends StatelessWidget {
                   );
                 }),
                 const SizedBox(height: 10),
-                buildButton("Admin Dashboard",
-                    Icons.admin_panel_settings_outlined, () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const AdminDashboardScreen()),
-                      );
-                    }),
-                const SizedBox(height: 10),
 
-                // ✅ Fixed Logout Button
                 buildButton("Logout", Icons.logout, () async {
                   await FirebaseAuth.instance.signOut();
                   Navigator.pushNamedAndRemoveUntil(

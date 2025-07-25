@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
 import 'add_health_tips_screen.dart';
 import 'add_qoute_screen.dart';
 import 'add_category_screen.dart';
@@ -22,38 +24,22 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   void initState() {
     super.initState();
 
-    // Stream for total users count
     usersCountStream = FirebaseFirestore.instance
         .collection('users')
         .snapshots()
         .map((snapshot) => snapshot.size);
 
-    // Stream for unique categories count (from Quotes and HealthTips docs)
     categoriesCountStream = FirebaseFirestore.instance
-        .collection('entries')
+        .collection('categories')
         .snapshots()
-        .map((snapshot) {
-      final categories = <String>{};
-      for (var doc in snapshot.docs) {
-        final data = doc.data();
-        final type = data['type'] as String? ?? '';
-        final category = data['category'] as String? ?? '';
+        .map((snapshot) => snapshot.size);
 
-        if ((type == 'Quotes' || type == 'HealthTips') && category.isNotEmpty) {
-          categories.add(category);
-        }
-      }
-      return categories.length;
-    });
-
-    // Stream for total quotes count
     quotesCountStream = FirebaseFirestore.instance
         .collection('entries')
         .where('type', isEqualTo: 'Quotes')
         .snapshots()
         .map((snapshot) => snapshot.size);
 
-    // Stream for total health tips count
     healthTipsCountStream = FirebaseFirestore.instance
         .collection('entries')
         .where('type', isEqualTo: 'HealthTips')
@@ -68,11 +54,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
+        automaticallyImplyLeading: false,
         title: const Text("Dashboard", style: TextStyle(fontSize: 20)),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
       ),
       body: SafeArea(
         child: Padding(
@@ -146,6 +129,30 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   );
                 },
               ),
+
+              const Spacer(),
+
+              // 👇 Logout Button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    await FirebaseAuth.instance.signOut();
+                    Navigator.of(context).pushReplacementNamed('/login');
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.redAccent,
+                    padding: EdgeInsets.symmetric(vertical: 16.h),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12.r),
+                    ),
+                  ),
+                  child: const Text(
+                    "Logout",
+                    style: TextStyle(color: Colors.white, fontSize: 16),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -178,7 +185,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(label,
-                        style: TextStyle(color: Colors.white70, fontSize: 14.sp)),
+                        style:
+                        TextStyle(color: Colors.white70, fontSize: 14.sp)),
                     SizedBox(height: 8.h),
                     Text(
                       count.toString(),
