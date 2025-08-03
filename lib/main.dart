@@ -1,6 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:wellness/services/fcm_services.dart';
 
 import 'add_category_screen.dart';
 import 'add_health_tips_screen.dart';
@@ -11,8 +12,14 @@ import 'preference_screen.dart';
 import 'dashboard_screen.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  WidgetsBinding _ = WidgetsFlutterBinding.ensureInitialized();
+  final FCMServices fcmServices =FCMServices();
   await Firebase.initializeApp();
+  await fcmServices.initializeCloudMessaging();
+  fcmServices.listenFCMMessage(firebaseMessagingBackgroundHandler);
+  ;
+  String? fcmToken = await fcmServices.getFCMToken();
+  print("fcm token: $fcmToken");
 
   runApp(const MyApp());
 }
